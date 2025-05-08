@@ -1,0 +1,247 @@
+---
+title: "Gapminder Data Analysis"
+author: "Your Name"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    code_folding: hide
+    theme: united
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo       = TRUE,
+  warning    = FALSE,
+  message    = FALSE,
+  fig.width  = 8,
+  fig.height = 5
+)
+pkgs <- c("ggplot2","dplyr","gapminder","scales","viridis","tidyr","forcats","zoo")
+for(pkg in pkgs) if(!requireNamespace(pkg, quietly=TRUE)) install.packages(pkg)
+lapply(pkgs, library, character.only=TRUE)
+````
+
+# 1. Introduction
+
+This analysis explores global trends in life expectancy, GDP per capita, and population from 1952 to 2007 using the Gapminder dataset. We will produce 12 charts and fit a regression model.
+
+# 2. Data Loading & Preparation
+
+```{r load-data}
+data("gapminder")
+gm <- gapminder
+
+latest <- gm %>% 
+  filter(year == max(year))
+
+global_trends <- gm %>%
+  group_by(year) %>%
+  summarize(
+    avg_lifeExp   = mean(lifeExp),
+    avg_gdpPercap = mean(gdpPercap),
+    total_pop     = sum(pop),
+    .groups = "drop"
+  )
+```
+
+# 3. Global Trends
+
+## 3.1 Global Average Life Expectancy
+
+```{r global-lifeExp}
+p1 <- ggplot(global_trends, aes(year, avg_lifeExp)) +
+  geom_line(color="steelblue", size=1) +
+  labs(
+    title = "Global Average Life Expectancy Over Time",
+    x = "Year", y = "Life Expectancy (years)"
+  ) +
+  theme_minimal()
+print(p1)
+```
+
+## 3.2 Global Average GDP per Capita
+
+```{r global-gdp}
+p2 <- ggplot(global_trends, aes(year, avg_gdpPercap)) +
+  geom_line(color="darkgreen", size=1) +
+  scale_y_continuous(labels = scales::dollar_format()) +
+  labs(
+    title = "Global Average GDP per Capita Over Time",
+    x = "Year", y = "GDP per Capita (USD)"
+  ) +
+  theme_minimal()
+print(p2)
+```
+
+## 3.3 Global Total Population
+
+```{r global-pop}
+p3 <- ggplot(global_trends, aes(year, total_pop/1e9)) +
+  geom_line(color="purple", size=1) +
+  labs(
+    title = "Global Total Population Over Time",
+    x = "Year", y = "Population (billions)"
+  ) +
+  theme_minimal()
+print(p3)
+```
+
+# 4. Country-Level Analysis (2007)
+
+## 4.1 Life Expectancy vs GDP per Capita
+
+```{r scatter-lifespan-gdp}
+p4 <- ggplot(latest, aes(gdpPercap, lifeExp)) +
+  geom_point(alpha=0.7) +
+  scale_x_log10(labels = scales::dollar_format()) +
+  labs(
+    title = "Life Expectancy vs GDP per Capita (2007)",
+    x = "GDP per Capita (log scale)", y = "Life Expectancy (years)"
+  ) +
+  theme_minimal()
+print(p4)
+```
+
+## 4.2 Regression: lifeExp \~ log(gdpPercap)
+
+```{r regression}
+model <- lm(lifeExp ~ log(gdpPercap), data = latest)
+cat("Regression summary:\n")
+print(summary(model))
+
+p5 <- ggplot(latest, aes(log(gdpPercap), lifeExp)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = TRUE, color = "darkred") +
+  labs(
+    title = "Regression: Life Expectancy ~ log(GDP per Capita)",
+    x = "log(GDP per Capita)", y = "Life Expectancy"
+  ) +
+  theme_minimal()
+print(p5)
+```
+
+## 4.3 Top 10 Countries by Life Expectancy
+
+```{r top10-lifeExp}
+top10_le <- latest %>%
+  arrange(desc(lifeExp)) %>%
+  slice_head(n = 10)
+p6 <- ggplot(top10_le, aes(fct_reorder(country, lifeExp), lifeExp)) +
+  geom_col(fill = "darkslateblue") +
+  coord_flip() +
+  labs(
+    title = "Top 10 Countries by Life Expectancy (2007)",
+    x = NULL, y = "Life Expectancy (years)"
+  ) +
+  theme_minimal()
+print(p6)
+```
+
+# 5. Continental Comparisons
+
+## 5.1 Boxplot: Life Expectancy by Continent
+
+```{r boxplot-continent}
+p7 <- ggplot(latest, aes(continent, lifeExp, fill = continent)) +
+  geom_boxplot() +
+  labs(
+    title = "Life Expectancy by Continent (2007)",
+    x = "Continent", y = "Life Expectancy (years)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+print(p7)
+```
+
+## 5.2 Violin: GDP per Capita by Continent
+
+```{r violin-gdp}
+p8 <- ggplot(latest, aes(continent, gdpPercap, fill = continent)) +
+  geom_violin() +
+  scale_y_log10(labels = scales::dollar_format()) +
+  labs(
+    title = "GDP per Capita Distribution by Continent (2007)",
+    x = "Continent", y = "GDP per Capita (log scale)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+print(p8)
+```
+
+# 6. Trends by Continent
+
+## 6.1 Life Expectancy Over Time
+
+```{r trend-by-continent}
+p9 <- ggplot(gm, aes(year, lifeExp, color = continent)) +
+  geom_line(stat="summary", fun="mean", size=1) +
+  labs(
+    title = "Average Life Expectancy Over Time by Continent",
+    x = "Year", y = "Life Expectancy (years)", color = "Continent"
+  ) +
+  theme_minimal()
+print(p9)
+```
+
+# 7. Distribution & Heatmap
+
+## 7.1 Density: Life Expectancy (2007)
+
+```{r density-lifeExp}
+p10 <- ggplot(latest, aes(lifeExp, fill = continent)) +
+  geom_density(alpha = 0.6) +
+  labs(
+    title = "Density of Life Expectancy by Continent (2007)",
+    x = "Life Expectancy (years)", y = "Density"
+  ) +
+  theme_minimal()
+print(p10)
+```
+
+## 7.2 Heatmap: Life Expectancy by Year & Continent
+
+```{r heatmap-lifeExp}
+heat_data <- gm %>%
+  group_by(continent, year) %>%
+  summarize(avg_le = mean(lifeExp), .groups="drop")
+p11 <- ggplot(heat_data, aes(year, continent, fill = avg_le)) +
+  geom_tile(color = "white") +
+  scale_fill_viridis(name = "Avg Life Exp") +
+  labs(
+    title = "Average Life Expectancy by Year & Continent",
+    x = "Year", y = "Continent"
+  ) +
+  theme_minimal()
+print(p11)
+```
+
+# 8. Population Bubble Plot
+
+```{r bubble-plot}
+p12 <- ggplot(latest, aes(gdpPercap, lifeExp, size = pop, color = continent)) +
+  geom_point(alpha = 0.6) +
+  scale_x_log10(labels = scales::dollar_format()) +
+  scale_size_continuous(
+    labels = scales::comma_format(scale = 1e-6),
+    name   = "Population\n(millions)"
+  ) +
+  labs(
+    title = "Life Expectancy vs GDP per Capita (2007) Sized by Population",
+    x     = "GDP per Capita (log scale)",
+    y     = "Life Expectancy"
+  ) +
+  theme_minimal()
+print(p12)
+```
+
+# 9. Conclusions
+
+This analysis highlights:
+
+* Steady increases in global life expectancy and GDP per capita.
+* Strong positive correlation between wealth and longevity.
+* Significant continental differences in health and economic outcomes.
+
+Further extensions could examine fertility, child mortality, or educational attainment as additional dimensions.
