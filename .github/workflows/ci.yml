@@ -1,0 +1,72 @@
+name: Build & Publish Gapminder Report
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.3'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev
+
+      - name: Install R packages
+        run: |
+          Rscript -e "install.packages(c(
+            'ggplot2','dplyr','gapminder','scales','viridis','tidyr','forcats','zoo','rmarkdown'
+          ), repos='https://cloud.r-project.org/')"
+
+      - name: Run analysis script
+        run: |
+          chmod +x scripts/run_gapminder.sh
+          bash scripts/run_gapminder.sh
+
+      - name: Render RMarkdown report
+        run: |
+          chmod +x scripts/render_report.sh
+          bash scripts/render_report.sh
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: Gapminder-report
+          path: |
+            Gapminder_report.html
+            gap-*.png
+
+  deploy-pages:
+    needs: build-report
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: Gapminder-report
+          path: build/
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          publish_branch: gh-pages
+          publish_dir: build
+          keep_files: true
+          user_name: github-actions
+          user_email: github-actions@github.com
