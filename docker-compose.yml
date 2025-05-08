@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  gapminder:
+    build: .
+    volumes:
+      - .:/app
+    command: >
+      bash -lc
+      "bash scripts/run_gapminder.sh &&
+       bash scripts/render_report.sh"
